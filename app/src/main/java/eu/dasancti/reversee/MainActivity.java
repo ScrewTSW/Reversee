@@ -5,7 +5,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.TextView;
@@ -33,8 +36,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String API_SCH_VALUE = "sch";
     private static final String API_ENCODED_IMAGE_KEY = "encoded_image";
     private static final String API_USER_AGENT_KEY = "User-Agent";
+    private static final int REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE = 99;
 
     private TextView progressStatus;
+    private Uri requestPermissionsFallbackUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,11 +50,16 @@ public class MainActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         String action = intent.getAction();
+        if (action == null) {
+            Toast.makeText(MainActivity.this, "No action sent to application, closing.", Toast.LENGTH_SHORT).show();
+            this.finish();
+            return;
+        }
         if (isPermissionGranted()) {
             if (action.equals(Intent.ACTION_SEND)) {
                 progressStatus.setText(getString(R.string.progress_status_recieved_intent));
                 try {
-                    handleImageSearch(intent);
+                    handleImageSearch(intent.getParcelableExtra(Intent.EXTRA_STREAM));
                 } catch (FileNotFoundException e) {
                     String err = "Failed to handle Share image intent:"+e.getMessage();
                     Log.e("INTENT_HANDLE",err);
@@ -57,12 +67,47 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } else {
-            Toast.makeText(this, "The app wasn't allowed permissions to manage files.", Toast.LENGTH_LONG).show();
+            android.support.v7.app.AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Read storage permission required.");
+            builder.setMessage("This application requires READ_EXTERNAL_STORAGE permission in order to function properly.");
+            builder.setPositiveButton("Grant permission", (dialog, which) -> {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE);
+                if (action.equals(Intent.ACTION_SEND)) {
+                    requestPermissionsFallbackUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                }
+            });
+            builder.setNegativeButton("Deny permission", ((dialog, which) -> {
+                Toast.makeText(MainActivity.this, "Permission not granted, closing.", Toast.LENGTH_SHORT).show();
+                this.finish();
+            }));
+            builder.create().show();
         }
     }
 
-    private void handleImageSearch(Intent intent) throws FileNotFoundException {
-        Uri imageUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String permissions[],
+                                           @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(MainActivity.this, "Permission Granted!", Toast.LENGTH_SHORT).show();
+                    try {
+                        handleImageSearch(this.requestPermissionsFallbackUri);
+                    } catch (FileNotFoundException e) {
+                        String err = "Failed to handle Share image intent:"+e.getMessage();
+                        Log.e("INTENT_HANDLE",err);
+                        Toast.makeText(getApplicationContext(), err, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "Permission not granted, closing.", Toast.LENGTH_SHORT).show();
+                    this.finish();
+                }
+                break;
+        }
+    }
+
+    private void handleImageSearch(Uri imageUri) throws FileNotFoundException {
         progressStatus.setText(getString(R.string.progress_status_handling_image));
         AtomicReference<String> reverseSearchRedirectURL = new AtomicReference<>();
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
