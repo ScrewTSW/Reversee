@@ -1,7 +1,10 @@
 <resources>
     <string name="app_name">Reversee</string>
-	<string name="progress_status_recieved_intent">Recieved intent data (image share)</string>
+	<string name="progress_status_recieved_intent">Received intent data (image share)</string>
     <string name="progress_status_handling_image">Handling google reverse image search.</string>
     <string name="progress_status_response_success">Google request successful.</string>
     <string name="progress_status_redirect_found">Found redirect URL, opening browser intent.</string>
+    <string name="progress_status_parsing_link">Parsing URL from share.</string>
+    <string name="progress_status_unsupported_format">Unsupported file format from link.</string>
+    <string name="progress_status_opening_from_url">Opening browser with shared URL</string>
 </resources>
