@@ -6,8 +6,8 @@ android {
         applicationId "eu.dasancti.reversee"
         minSdkVersion 21
         targetSdkVersion 28
-        versionCode 2
-        versionName "ALPHA v0.3"
+        versionCode 3
+        versionName "ALPHA v0.4"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {

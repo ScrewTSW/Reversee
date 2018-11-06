@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -63,7 +64,8 @@ public class MainActivity extends AppCompatActivity {
         }
         if (action.equals(Intent.ACTION_SEND)) {
             if (intent.hasExtra(Intent.EXTRA_TEXT)) {
-                String intentExtraText = intent.getParcelableExtra(Intent.EXTRA_TEXT).toString();
+                String intentExtraText = getSharedURL(intent);
+                if (intentExtraText == null) return;
                 progressStatus.setText(getString(R.string.progress_status_parsing_link));
                 if (intentExtraText.endsWith(".jpg") ||
                     intentExtraText.endsWith(".png") ||
@@ -114,6 +116,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Nullable
+    private String getSharedURL(Intent intent) {
+        Bundle extras = intent.getExtras();
+        if (extras == null) {
+            Toast.makeText(MainActivity.this, "Failed to get shared URL, incorrect format.", Toast.LENGTH_SHORT).show();
+            this.finish();
+            return null;
+        }
+        String intentExtraText = extras.getString(Intent.EXTRA_TEXT);
+        if (intentExtraText == null) {
+            Toast.makeText(MainActivity.this, "Failed to get URL from bundle, URL is empty or malformed", Toast.LENGTH_SHORT).show();
+            this.finish();
+            return null;
+        }
+        return intentExtraText;
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String permissions[],
@@ -142,6 +161,7 @@ public class MainActivity extends AppCompatActivity {
         AtomicReference<String> reverseSearchRedirectURL = new AtomicReference<>();
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
         asyncHttpClient.addHeader(API_USER_AGENT_KEY, FAKE_USER_AGENT);
+        asyncHttpClient.setTimeout(30_000);
         RequestParams requestParams = new RequestParams();
         requestParams.put(API_SCH_KEY, API_SCH_VALUE);
         requestParams.put(API_ENCODED_IMAGE_KEY, Objects.requireNonNull(getContentResolver().openInputStream(imageUri)));
