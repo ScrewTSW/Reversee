@@ -5,12 +5,12 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -44,13 +44,44 @@ public class MainActivity extends AppCompatActivity {
     private Uri requestPermissionsFallbackUri;
 
     @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String permissions[],
+                                           @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(MainActivity.this, "Permission Granted!", Toast.LENGTH_SHORT).show();
+                    try {
+                        handleImageSearch(this.requestPermissionsFallbackUri);
+                    } catch (FileNotFoundException e) {
+                        String err = "Failed to handle Share image intent:"+e.getMessage();
+                        Log.e("INTENT_HANDLE",err);
+                        Toast.makeText(getApplicationContext(), err, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "Permission not granted, closing.", Toast.LENGTH_SHORT).show();
+                    this.finish();
+                }
+                break;
+        }
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         progressStatus = findViewById(R.id.progressStatus);
-
         Intent intent = getIntent();
+        handleReverseImageSearch(intent);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleReverseImageSearch(intent);
+    }
+
+    private void handleReverseImageSearch(Intent intent) {
         if (intent == null) {
             Toast.makeText(MainActivity.this, "No intent sent to application, closing.", Toast.LENGTH_SHORT).show();
             this.finish();
@@ -62,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
             this.finish();
             return;
         }
-        if (action.equals(Intent.ACTION_SEND)) {
+        if (action.equals(Intent.ACTION_SEND) || action.equals(Intent.ACTION_SENDTO)) {
             if (intent.hasExtra(Intent.EXTRA_TEXT)) {
                 String intentExtraText = getSharedURL(intent);
                 if (intentExtraText == null) return;
@@ -131,29 +162,6 @@ public class MainActivity extends AppCompatActivity {
             return null;
         }
         return intentExtraText;
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String permissions[],
-                                           @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE:
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(MainActivity.this, "Permission Granted!", Toast.LENGTH_SHORT).show();
-                    try {
-                        handleImageSearch(this.requestPermissionsFallbackUri);
-                    } catch (FileNotFoundException e) {
-                        String err = "Failed to handle Share image intent:"+e.getMessage();
-                        Log.e("INTENT_HANDLE",err);
-                        Toast.makeText(getApplicationContext(), err, Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(MainActivity.this, "Permission not granted, closing.", Toast.LENGTH_SHORT).show();
-                    this.finish();
-                }
-                break;
-        }
     }
 
     private void handleImageSearch(Uri imageUri) throws FileNotFoundException {
