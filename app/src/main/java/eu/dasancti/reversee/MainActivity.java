@@ -19,23 +19,34 @@ import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestHandle;
 import com.loopj.android.http.RequestParams;
 import cz.msebera.android.httpclient.Header;
+import cz.msebera.android.httpclient.cookie.Cookie;
+import cz.msebera.android.httpclient.impl.client.BasicCookieStore;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.FileNotFoundException;
+import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL = "https://www.google.com/searchbyimage/upload";
-    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL = "https://www.google.com/searchbyimage?&image_url=";
+    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL = "https://lens.google.com/upload";
+    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL = "https://lens.google.com/uploadbyurl?url=";
     private static final String FAKE_USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11";
-    private static final String API_SCH_KEY = "sch";
-    private static final String API_SCH_VALUE = "sch";
+    private static final String API_HL_KEY = "hl";
+    private static final String API_HL_VALUE = "en-US";
+    private static final String API_RE_KEY = "re";
+    private static final String API_RE_VALUE = "df";
+    private static final String API_UNIX_TIMESTAMP_KEY = "st";
+    private static final String API_EP_KEY = "ep";
+    private static final String API_EP_VALUE = "gisbubb";
+    private static final String API_PARAMS_COMBINED = "&"+API_HL_KEY+"="+API_HL_VALUE+"&"+API_RE_KEY+"="+API_RE_VALUE+"&"+API_EP_KEY+"="+API_EP_VALUE+"&"+API_UNIX_TIMESTAMP_KEY+"=";
     private static final String API_ENCODED_IMAGE_KEY = "encoded_image";
     private static final String API_USER_AGENT_KEY = "User-Agent";
     private static final int REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE = 99;
@@ -106,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(MainActivity.this, getString(R.string.progress_status_opening_from_url), Toast.LENGTH_SHORT).show();
                     Intent searchIntent = new Intent();
                     searchIntent.setAction(Intent.ACTION_VIEW);
-                    searchIntent.setData(Uri.parse(GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL.concat(intentExtraText)));
+                    searchIntent.setData(Uri.parse(GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL.concat(intentExtraText).concat(API_PARAMS_COMBINED).concat(String.valueOf(System.currentTimeMillis()/1000))));
                     startActivity(searchIntent);
                     MainActivity.this.finish();
                 } else {
@@ -169,49 +180,51 @@ public class MainActivity extends AppCompatActivity {
         AtomicReference<String> reverseSearchRedirectURL = new AtomicReference<>();
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
         asyncHttpClient.addHeader(API_USER_AGENT_KEY, FAKE_USER_AGENT);
+        asyncHttpClient.addHeader("Host", "lens.google.com");
+        asyncHttpClient.addHeader("Origin", "https://images.google.com");
+        asyncHttpClient.addHeader("Referer", "https://images.google.com/");
         asyncHttpClient.setTimeout(30_000);
         RequestParams requestParams = new RequestParams();
-        requestParams.put(API_SCH_KEY, API_SCH_VALUE);
+        requestParams.put(API_HL_KEY, API_HL_VALUE);
+        requestParams.put(API_RE_KEY, API_RE_VALUE);
+        requestParams.put(API_UNIX_TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()/1000));
+        requestParams.put(API_EP_KEY, API_EP_VALUE);
         requestParams.put(API_ENCODED_IMAGE_KEY, Objects.requireNonNull(getContentResolver().openInputStream(imageUri)));
         RequestHandle requestHandle = asyncHttpClient.post(getApplicationContext(),GOOGLE_REVERSE_IMAGE_SEARCH_URL, requestParams, new AsyncHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
-                Log.e("UNEXPECTED", "Based on the stupendous behavior of this async library, we should never be able to get here. 3xx HTML codes are considered a failure.");
-                MainActivity.this.finish();
+                progressStatus.setText(getString(R.string.progress_status_response_success));
+                Log.i("RESPONSE_SUCCESS", "Recieved status 200, processing HTML response.");
+                String responseString = new String(responseBody);
+                Document doc = Jsoup.parse(responseString);
+                Elements redirects = doc.getElementsByTag("meta");
+                for (Element redirect : redirects) {
+                    String redirectUrl = redirect.attr("content");
+                    if (redirectUrl.contains("/search?p=")) {
+                        reverseSearchRedirectURL.set(redirectUrl.split("URL=")[1]);
+                        progressStatus.setText(getString(R.string.progress_status_redirect_found));
+                        break;
+                    }
+                }
+                if (reverseSearchRedirectURL.get().isEmpty()) {
+                    Toast.makeText(MainActivity.this, "Failed to get redirect URL", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "Found redirect URL for reverse search, opening browser.", Toast.LENGTH_SHORT).show();
+                    Log.i("REVERSE_SEARCH_URL", reverseSearchRedirectURL.get());
+                    Intent searchIntent = new Intent();
+                    searchIntent.setAction(Intent.ACTION_VIEW);
+                    searchIntent.setData(Uri.parse(reverseSearchRedirectURL.get()));
+                    startActivity(searchIntent);
+                    MainActivity.this.finish();
+                }
             }
 
             @Override
             public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
-                if (statusCode == 302) {
-                    progressStatus.setText(getString(R.string.progress_status_response_success));
-                    Log.i("RESPONSE_SUCCESS", "Recieved 302 redirect, processing HTML response.");
-                    String responseString = new String(responseBody);
-                    Document doc = Jsoup.parse(responseString);
-                    Elements redirects = doc.getElementsByTag("a");
-                    for (Element redirect : redirects) {
-                        String redirectUrl = redirect.attr("href");
-                        if (redirectUrl.contains("/search?tbs=sbi:")) {
-                            reverseSearchRedirectURL.set(redirectUrl);
-                            progressStatus.setText(getString(R.string.progress_status_redirect_found));
-                            break;
-                        }
-                    }
-                    if (reverseSearchRedirectURL.get().isEmpty()) {
-                        Toast.makeText(MainActivity.this, "Failed to get redirect URL", Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(MainActivity.this, "Found redirect URL for reverse search, opening browser.", Toast.LENGTH_SHORT).show();
-                        Log.i("REVERSE_SEARCH_URL", reverseSearchRedirectURL.get());
-                        Intent searchIntent = new Intent();
-                        searchIntent.setAction(Intent.ACTION_VIEW);
-                        searchIntent.setData(Uri.parse(reverseSearchRedirectURL.get()));
-                        startActivity(searchIntent);
-                        MainActivity.this.finish();
-                    }
-                } else {
-                    String err = "POST call to reverse search failed [" + statusCode + "] error message: " + error.getMessage() + "\n body:" + Arrays.toString(responseBody);
-                    Log.e("POST_CALL_FAILED", err);
-                    Toast.makeText(MainActivity.this, err, Toast.LENGTH_LONG).show();
-                }
+                String err = "POST call to reverse search failed [" + statusCode + "] error message: " + error.getMessage() + "\n body:" + Arrays.toString(responseBody);
+                Log.e("POST_CALL_FAILED", err);
+                Toast.makeText(MainActivity.this, err, Toast.LENGTH_LONG).show();
+                MainActivity.this.finish();
             }
         });
     }
