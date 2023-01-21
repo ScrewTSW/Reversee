@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainActivity extends AppCompatActivity {
 
     private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL = "https://www.google.com/searchbyimage/upload";
-    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL = "https://www.google.com/searchbyimage?&image_url=";
+    private static final String GOOGLE_REVERSE_IMAGE_SEARCH_URL_BY_URL = "https://www.google.com/searchbyimage?sbisrc=reversee&safe=off&image_url=";
     private static final String FAKE_USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11";
     private static final String API_SCH_KEY = "sch";
     private static final String API_SCH_VALUE = "sch";
@@ -45,8 +45,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String permissions[],
+                                           @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
             case REQUEST_PERMISSION_EXTERNAL_STORAGE_STATE:
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -172,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
         asyncHttpClient.setTimeout(30_000);
         RequestParams requestParams = new RequestParams();
         requestParams.put(API_SCH_KEY, API_SCH_VALUE);
+        requestParams.put("sbisrc", "reversee");
         requestParams.put(API_ENCODED_IMAGE_KEY, Objects.requireNonNull(getContentResolver().openInputStream(imageUri)));
         RequestHandle requestHandle = asyncHttpClient.post(getApplicationContext(),GOOGLE_REVERSE_IMAGE_SEARCH_URL, requestParams, new AsyncHttpResponseHandler() {
             @Override
